@@ -22,9 +22,14 @@ class Trainer:
                 x_hat, mu, logvar = self.model(x)
                 kl_loss = self.kl_loss(mu, logvar)
                 focal_loss = self.focal_loss(x, x_hat)
+                
+                print(f'KL Loss: {kl_loss.item()}, Focal Loss: {focal_loss.item()}')
+
                 loss = kl_loss + focal_loss
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+
                 if i % 100 == 0:
                     print(f'Epoch {epoch}, Iteration {i}, Loss: {loss.item()}')
+            break
