@@ -4,7 +4,7 @@ This repository is intended to serve as a code base for the final project of Ull
 ## Workflow
 ### Use of Branches
 `main` branch is the protected branch that should always be deployable (code runs without errors, current version we would hand in if asked to do so). New code is always implemented on another branch. 
-Often these are called feature branches as they are created to implement a specific feature. In our case it might be enough to have the 3 additional branches `tobi`, `fabian` and `anton` that we use respectively for implementation. If new code runs without errors on the feature branch (and if it is sufficiently commented) the corresponding branch can be merged with the `main` branch. For that don't forget to pull the main branch into the implementation branch before merging for preventing merging conflicts.
+Often these are called feature branches as they are created to implement a specific feature. In our case it might be enough to have the 3 additional branches `emily`, `fabian` and `tobi` that we use respectively for implementation. If new code runs without errors on the feature branch (and if it is sufficiently commented) the corresponding branch can be merged with the `main` branch. For that don't forget to pull the main branch into the implementation branch before merging for preventing merging conflicts.
 
 ### Gitignore file
 the `.gitignore` file is used to make git ignore local files which should not be syncronized. For example files that are created during the compiling process of python or the environment which is used to run the code.
@@ -21,7 +21,7 @@ Probably Copilot is the most efficient way to write docstrings though (I didn't 
 
 ## Good Practices
 -   regular commits with meaningful commit-messages
--   avoid commiting directly to the `main` branch
+-   avoid commiting directly to the `main` branch (we might want to enforce this with a corresponding ruleset in github: settings > rules > rulesets)
 -   regularily merge the `main` branch into the branch you are currently working on to detect conflicts early on. At the latest this is very important to be done before merging the branch you have been woring on into the `main` branch! "First `main` into `new_feature_branch` then the other way round to update `main`!"
 -   regualarily merge into `main`
 -   do testing and documentation before merging into `main`
