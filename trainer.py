@@ -13,7 +13,7 @@ class Trainer:
     def kl_loss(self, mu, logvar):
         return 0.5 * torch.mean(mu.pow(2) + logvar.exp() - logvar - 1)
 
-    def focal_loss(self, x, x_hat, gamma=2, alpha=0.17):
+    def focal_loss(self, x, x_hat, gamma=2, alpha=0.125):
         eps = 1e-7
         x_hat = torch.clamp(x_hat, eps, 1 - eps)
         return -torch.mean(
@@ -22,7 +22,7 @@ class Trainer:
         )
 
     # pre_training uses the focal loss and KL divergence loss
-    def train(self, train_loader, epochs, disk_path=None):
+    def train(self, train_loader, epochs, disk_path=None, gamma=2, alpha=0.125):
         self.model.train()
         losses = []
         for epoch in range(epochs):
@@ -31,7 +31,7 @@ class Trainer:
                 x = x.to(self.device)
                 x_hat, mu, logvar = self.model(x)
                 kl_loss = self.kl_loss(mu, logvar)
-                focal_loss = self.focal_loss(x, x_hat)
+                focal_loss = self.focal_loss(x, x_hat, gamma, alpha)
 
                 loss = kl_loss + focal_loss
                 self.optimizer.zero_grad()
