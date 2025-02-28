@@ -7,6 +7,7 @@ import torch.nn as nn
 class VAE(nn.Module):
     def __init__(self, input_dim, hidden_dim, hidden_layers, latent_dim, group_sizes):
         super(VAE, self).__init__()
+        self.latent_dim = latent_dim
         self.encoder = Encoder(input_dim, hidden_dim, hidden_layers, latent_dim)
         self.decoder = Decoder(
             input_dim, hidden_dim, hidden_layers, latent_dim, group_sizes
@@ -20,6 +21,10 @@ class VAE(nn.Module):
     def forward(self, x):
         z, mu, logvar = self.encoder(x)
         return self.decoder(z), mu, logvar
+
+    def pretrain_sample(self, num_samples):
+        z = torch.randn((num_samples, self.latent_dim))
+        return self.decoder(z)
 
 
 class Encoder(nn.Module):
