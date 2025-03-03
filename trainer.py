@@ -10,6 +10,16 @@ class Trainer:
         self.model.to(device)
         self.best_model = None
 
+        # LR decay schedule
+        self.start_decay = 1000
+        self.stop_decay = 4000
+        self.init_lr = 1e-3
+        self.new_lr = self.init_lr
+        self.final_lr = 1e-4
+        self.decay_rate = (self.final_lr / self.init_lr) ** (
+            1.0 / (self.stop_decay - self.start_decay)
+        )
+
     def kl_loss(self, mu, logvar):
         return 0.5 * torch.mean(mu.pow(2) + logvar.exp() - logvar - 1)
 
@@ -43,7 +53,16 @@ class Trainer:
             if not self.best_model or loss.item() < min(losses):
                 self.best_model = self.model.state_dict()
 
-            print(f"Epoch {epoch}, Loss: {loss.item()}")
             # save the best model to disk every 200 epochs
             if epoch % 200 == 0:
                 torch.save(self.best_model, f"{disk_path}")
+
+            # decay learning rate
+            if epoch >= self.start_decay and epoch <= self.stop_decay:
+                self.new_lr = self.init_lr * self.decay_rate ** (
+                    epoch - self.start_decay
+                )
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = self.new_lr
+
+            print(f"Epoch {epoch}, Loss: {loss.item()}, LR: {self.new_lr}")
