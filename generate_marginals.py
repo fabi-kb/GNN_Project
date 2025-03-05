@@ -39,11 +39,9 @@ def load_and_clean_table(table_path):
 
 
 def generate_marginals():
-    # Initialise final table of marginals
-    with open("variables.json") as f:
-        variables = json.load(f)
+    # Initialise final dictionary of marginals
 
-    marginals = {v: np.nan for v in variables}
+    marginals = {}
 
     ############################################
     # Handle home-ownership (tenure): table S1101
@@ -72,11 +70,13 @@ def generate_marginals():
         table[table["Label (Grouping)"].isin(present_languages)].iloc[:, 1].tolist()
     )
 
-    marginals["HHL:english"] = n_household - sum(language_counts)
-    marginals["HHL:spanish"] = language_counts[0]
-    marginals["HHL:other indo-european"] = language_counts[1]
-    marginals["HHL:asian and pacific island languages"] = language_counts[2]
-    marginals["HHL:other"] = language_counts[3]
+    marginals["HHL:english"] = (n_household - sum(language_counts)) / n_household
+    marginals["HHL:spanish"] = language_counts[0] / n_household
+    marginals["HHL:other indo-european"] = language_counts[1] / n_household
+    marginals["HHL:asian and pacific island languages"] = (
+        language_counts[2] / n_household
+    )
+    marginals["HHL:other"] = language_counts[3] / n_household
 
     ############################################
     # Handle number of vehicles: table B08201
@@ -94,11 +94,13 @@ def generate_marginals():
         table[table["Label (Grouping)"].isin(vehicle_labels)].iloc[:5, 1].tolist()
     )
 
-    marginals["VEH:no vehicles"] = vehicle_counts[0]
-    marginals["VEH:1 vehicle"] = vehicle_counts[1]
-    marginals["VEH:2 vehicles"] = vehicle_counts[2]
-    marginals["VEH:3 vehicles"] = vehicle_counts[3]
-    marginals["VEH:4 or more vehicles"] = vehicle_counts[4]
+    n_vehicle_households = sum(vehicle_counts)
+
+    marginals["VEH:no vehicles"] = vehicle_counts[0] / n_vehicle_households
+    marginals["VEH:1 vehicle"] = vehicle_counts[1] / n_vehicle_households
+    marginals["VEH:2 vehicles"] = vehicle_counts[2] / n_vehicle_households
+    marginals["VEH:3 vehicles"] = vehicle_counts[3] / n_vehicle_households
+    marginals["VEH:4 or more vehicles"] = vehicle_counts[4] / n_vehicle_households
 
     ############################################
     # Handle income: table S1901
@@ -125,8 +127,8 @@ def generate_marginals():
     n_household = table.iloc[0, 1]
 
     n_yes = table.iloc[1, 1]
-    marginals["R65:no"] = n_household - n_yes
-    marginals["R65:yes"] = n_yes
+    marginals["R65:no"] = (n_household - n_yes) / n_household
+    marginals["R65:yes"] = n_yes / n_household
 
     ############################################
     # Handle under 18: table B11005
@@ -137,8 +139,8 @@ def generate_marginals():
 
     n_yes = table.iloc[1, 1]
 
-    marginals["R18:no"] = n_household - n_yes
-    marginals["R18:yes"] = n_yes
+    marginals["R18:no"] = (n_household - n_yes) / n_household
+    marginals["R18:yes"] = n_yes / n_household
 
     ############################################
     # Handle age: table S0101
@@ -146,6 +148,7 @@ def generate_marginals():
     table = load_and_clean_table(table_path)
 
     table_ages = table.iloc[2:20, 1].tolist()
+    age_population = sum(table_ages)
 
     age_vars = [
         "AGEP:under 5",
@@ -169,7 +172,7 @@ def generate_marginals():
     ]
 
     for i, age in enumerate(age_vars):
-        marginals[age] = table_ages[i]
+        marginals[age] = table_ages[i] / age_population
 
     ############################################
     # Handle sex: table s0601
@@ -193,6 +196,8 @@ def generate_marginals():
 
     for i, label in enumerate(education_labels):
         marginals[label] = table_educations[i]
+
+    ## Remove NaN entries
 
     with open("marginals.json", "w") as f:
         json.dump(marginals, f, indent=4)
