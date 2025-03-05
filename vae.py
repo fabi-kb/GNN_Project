@@ -33,15 +33,17 @@ class Encoder(nn.Module):
         self.layers = self._build_layers(
             input_dim, hidden_dim, hidden_layers, latent_dim
         )
+        self.mu = nn.Linear(hidden_dim, latent_dim)
+        self.logvar = nn.Linear(hidden_dim, latent_dim)
+        self.mu_bn = nn.BatchNorm1d(latent_dim, eps=1e-5)
+        self.logvar_bn = nn.BatchNorm1d(latent_dim, eps=1e-5)
 
     def _build_layers(self, input_dim, hidden_dim, hidden_layers, latent_dim):
         layers = []
         layers.append(MLPBlock(input_dim, hidden_dim))
         for i in range(hidden_layers):
             layers.append(ResidualBlock(hidden_dim, hidden_dim))
-        # output mu and logvar
-        layers.append(nn.Linear(hidden_dim, latent_dim * 2))
-        layers.append(nn.BatchNorm1d(latent_dim * 2, eps=1e-5))
+
         return nn.Sequential(*layers)
 
     def reparametrize(self, mu, logvar):
@@ -50,9 +52,11 @@ class Encoder(nn.Module):
         return mu + eps * std
 
     def forward(self, x):
-        mu, logvar = self.layers(x).chunk(2, dim=1)
-        z = self.reparametrize(mu, logvar)
-        return z, mu, logvar
+        h = self.layers(x)
+
+        mu = self.mu_bn(self.mu(h))
+        logvar = self.logvar_bn(self.logvar(h))
+        return self.reparametrize(mu, logvar), mu, logvar
 
 
 class Decoder(nn.Module):
