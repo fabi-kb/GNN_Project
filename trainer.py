@@ -32,7 +32,7 @@ class Trainer:
         )
 
     # pre_training uses the focal loss and KL divergence loss
-    def train(self, train_loader, epochs, disk_path=None, gamma=2, alpha=0.125):
+    def train(self, train_loader, epochs, disk_path=None, gamma=2, alpha=0.125, beta=1):
         self.model.train()
         losses = []
         for epoch in range(epochs):
@@ -43,7 +43,7 @@ class Trainer:
                 kl_loss = self.kl_loss(mu, logvar)
                 focal_loss = self.focal_loss(x, x_hat, gamma, alpha)
 
-                loss = kl_loss + focal_loss
+                loss = beta * kl_loss + focal_loss
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
