@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class VAE(nn.Module):
@@ -123,7 +124,8 @@ class GroupSoftmax(nn.Module):
         outputs = []
         start = 0
         for size in self.group_sizes:
-            outputs.append(nn.Softmax(dim=1)(x[:, start : start + size]))
+            tmp = x[:, start : start + size]
+            tmp = F.softmax(tmp, dim=1)
+            outputs.append(tmp)
             start += size
-
         return torch.cat(outputs, dim=1)
