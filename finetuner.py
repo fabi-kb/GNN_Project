@@ -14,10 +14,19 @@ class Finetuner:
         self.model.to(device)
         self.best_model = None
 
+        self.start_decay = 300
+        self.stop_decay = 600
+        self.init_lr = 1e-3
+        self.new_lr = self.init_lr
+        self.final_lr = 1e-4
+        self.decay_rate = (self.final_lr / self.init_lr) ** (
+            1.0 / (self.stop_decay - self.start_decay)
+        )
+
         self.n_marginal_vars = len(marginals)
         self.matching_indices = self._get_matching_indices(marginals, self.column_names)
-        self.nan_column_indices = self._get_nan_column_indices(self.column_names)
-        self.n_nan_columns = len(self.nan_column_indices)
+        self.non_conforming_column_indices = self._get_non_conf_col_indices(self.column_names)
+        self.n_non_conf_columns = len(self.non_conforming_column_indices)
 
     def kl_loss(self, p):
         n = len(p)  # uniform distribution would be 1/n for each index in p
@@ -25,10 +34,17 @@ class Finetuner:
         p = torch.clip(p, 1e-10, 1)  # clip to avoid log(0)
         return torch.sum(p * torch.log(n * p))
 
-    def _get_nan_column_indices(self, column_names):
-        nan_column_indices = [idx for idx, col in enumerate(column_names) if 'nan' in col]
+    def _get_non_conf_col_indices(self, column_names):
+        '''
+        Get indices of columns that don't have a match in the marginals dict. For these columns, try to get values to 0 in finetuning
+        '''
 
-        return nan_column_indices
+        schl_pattern = re.compile(r'SCHL_\d+:other')
+        non_conf_indices = [idx for idx, col in enumerate(column_names) if 
+                              'nan' in col
+                              or schl_pattern.search(col)]
+
+        return non_conf_indices
 
     def _get_matching_indices(self, marginals, column_names):
         """
@@ -66,9 +82,14 @@ class Finetuner:
         # Handle personal variables
         # Find column indices to permit aggregating personal variables
         personal_one_hot_vars = [
-            var.replace("_1", "") for var in column_names if "_1:" in var
+            var.replace("_1", "") for var in column_names if "_1:" in var 
         ]
         personal_var_indices = {}
+
+        # Remove undesirable columns: nan columns and SCHL:other
+        personal_one_hot_vars = [var for var in personal_one_hot_vars if 
+                                 not var == 'SCHL:other'
+                                 and not 'nan' in var]
 
         # now store which columns correspond to each personal variable
         for var in personal_one_hot_vars:
@@ -120,9 +141,11 @@ class Finetuner:
             sum_of_squares += (predicted_marginal - self.marginals[var]) ** 2
 
         # Handle nan columns - they should be 0s
-        sum_of_squares += (predictions[:, self.nan_column_indices].sum(dim=0)**2).sum()
+        sum_of_squares += (predictions[:, self.non_conforming_column_indices].sum(dim=0)**2).sum()
 
-        RMSE = torch.sqrt(sum_of_squares / (self.n_marginal_vars + self.n_nan_columns))
+        # Handle SCHL:other column - it should be 0
+
+        RMSE = torch.sqrt(sum_of_squares / (self.n_marginal_vars + self.n_non_conf_columns))
 
         return RMSE
 
@@ -189,4 +212,12 @@ class Finetuner:
             if epoch % 200 == 0:
                 torch.save(trainable_latent_codes, f"{disk_path}")
 
-            print(f"Epoch {epoch}, Loss: {loss.item()}, LR: {self.new_lr}")
+            # Decay learning rate
+            if epoch >= self.start_decay and epoch <= self.stop_decay:
+                self.new_lr = self.init_lr * self.decay_rate ** (
+                    epoch - self.start_decay
+                )
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = self.new_lr
+
+            print(f"Epoch {epoch}, Loss: {loss.item()}")

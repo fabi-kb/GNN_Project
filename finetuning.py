@@ -92,7 +92,7 @@ model.load_state_dict(params)
 trainable_latent_codes = torch.randn(n_synthetic_samples, latent_dim).to(device)
 trainable_latent_codes.requires_grad = True
 
-optimizer = optim.AdamW([trainable_latent_codes], lr=1e-3)
+optimizer = optim.AdamW([trainable_latent_codes], lr=1e-1)
 
 # Initialise finetuner and train
 finetuner = Finetuner(pums_data, marginals, model, optimizer, device)
