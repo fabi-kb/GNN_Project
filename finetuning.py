@@ -15,6 +15,8 @@ n_synthetic_samples = 500
 data_name = "one_hot_pNaNs_agep.csv"
 model_name = "model_l100_h500_b5_g2.pth"
 
+n_epochs = 10000
+
 # Find latent_dim and hidden_dim from model_name.
 model_parts = model_name.split('_')
 latent_dim = int(model_parts[1][1:])
@@ -92,9 +94,9 @@ model.load_state_dict(params)
 trainable_latent_codes = torch.randn(n_synthetic_samples, latent_dim).to(device)
 trainable_latent_codes.requires_grad = True
 
-optimizer = optim.AdamW([trainable_latent_codes], lr=1e-1)
+optimizer = optim.AdamW([trainable_latent_codes], lr=1e-2)
 
 # Initialise finetuner and train
 finetuner = Finetuner(pums_data, marginals, model, optimizer, device)
 
-finetuner.train(trainable_latent_codes, 100, "workspace/finetuned_models")
+finetuner.train(trainable_latent_codes, n_epochs, "workspace/finetuned_models")
