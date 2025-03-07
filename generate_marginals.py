@@ -5,7 +5,7 @@ import glob
 import json
 
 """
-Create marginal results for all variables across all data points for a given census tract. Requires populating folder ACS_tract_tables with tables S0101, S0601, S1101, S1602, S1901, B08201, B11007, B11005.
+Create marginal results for all variables across all data points for a given census tract. Requires populating folder /root/workspace/data/ACS_tract_tables with tables S0101, S0601, S1101, S1602, S1901, B08201, B11007, B11005.
 """
 
 
@@ -46,7 +46,7 @@ def generate_marginals():
     ############################################
     # Handle home-ownership (tenure): table S1101
     # Load and clean table
-    table_path = glob.glob("ACS_tract_tables/*S1101*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*S1101*")[0]
     table = load_and_clean_table(table_path)
 
     own_perc = table.iloc[23, 1]
@@ -56,7 +56,7 @@ def generate_marginals():
 
     ############################################
     # Handle language (HHL): table S1602
-    table_path = glob.glob("ACS_tract_tables/*S1602*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*S1602*")[0]
     table = load_and_clean_table(table_path)
 
     n_household = table.iloc[0, 1]
@@ -80,7 +80,7 @@ def generate_marginals():
 
     ############################################
     # Handle number of vehicles: table B08201
-    table_path = glob.glob("ACS_tract_tables/*B08201*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*B08201*")[0]
     table = load_and_clean_table(table_path)
 
     vehicle_labels = [
@@ -104,7 +104,7 @@ def generate_marginals():
 
     ############################################
     # Handle income: table S1901
-    table_path = glob.glob("ACS_tract_tables/*S1901*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*S1901*")[0]
     table = load_and_clean_table(table_path)
 
     incomes = table.iloc[1:11, 1].tolist()
@@ -121,7 +121,7 @@ def generate_marginals():
 
     ############################################
     # Handle over 65: table B11007
-    table_path = glob.glob("ACS_tract_tables/*B11007*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*B11007*")[0]
     table = load_and_clean_table(table_path)
 
     n_household = table.iloc[0, 1]
@@ -132,7 +132,7 @@ def generate_marginals():
 
     ############################################
     # Handle under 18: table B11005
-    table_path = glob.glob("ACS_tract_tables/*B11005*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*B11005*")[0]
     table = load_and_clean_table(table_path)
 
     n_household = table.iloc[0, 1]
@@ -144,7 +144,7 @@ def generate_marginals():
 
     ############################################
     # Handle age: table S0101
-    table_path = glob.glob("ACS_tract_tables/*S0101*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*S0101*")[0]
     table = load_and_clean_table(table_path)
 
     table_ages = table.iloc[2:20, 1].tolist()
@@ -176,7 +176,7 @@ def generate_marginals():
 
     ############################################
     # Handle sex: table s0601
-    table_path = glob.glob("ACS_tract_tables/*S0601*")[0]
+    table_path = glob.glob("/root/workspace/data/ACS_tract_tables/*S0601*")[0]
     table = load_and_clean_table(table_path)
 
     ## Sex:

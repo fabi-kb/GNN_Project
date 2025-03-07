@@ -8,15 +8,17 @@ from lion_pytorch import Lion
 import json
 
 from vae import VAE
-from trainer import Finetuner
+from finetuner import Finetuner
 
 # Parameters to set:
 n_synthetic_samples = 500
 data_name = "one_hot_pNaNs_agep.csv"
-model_name = "best_model_pNaNs_agep.pth"
+model_name = "model_l100_h500_b5_g2.pth"
 
-latent_dim = 500
-hidden_dim = 1500
+# Find latent_dim and hidden_dim from model_name.
+model_parts = model_name.split('_')
+latent_dim = int(model_parts[1][1:])
+hidden_dim = int(model_parts[2][1:])
 
 # Device config
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -24,7 +26,7 @@ print(f"Device: {device}")
 
 
 # load data and marginals
-pums_data = pd.read_csv(f"workspace/data/{data_name}")
+pums_data = pd.read_csv(f"/workspace/data/{data_name}")
 
 with open("marginals.json") as f:
     marginals = json.load(f)
@@ -83,7 +85,7 @@ group_sizes = [
 
 model = VAE(433, hidden_dim, 6, latent_dim, group_sizes)
 
-params = torch.load(f"workspace/models/{model_name}", map_location=torch.device("cpu"))
+params = torch.load(f"/workspace/models/{model_name}", map_location=torch.device("cpu"))
 model.load_state_dict(params)
 
 # Generate synthetic codes - make trainable and put in optimizer

@@ -28,6 +28,8 @@ class Finetuner:
     def _get_nan_column_indices(self, column_names):
         nan_column_indices = [idx for idx, col in enumerate(column_names) if 'nan' in col]
 
+        return nan_column_indices
+
     def _get_matching_indices(self, marginals, column_names):
         """
         Get the indices of the columns in the data tensor that match the marginals
@@ -118,7 +120,7 @@ class Finetuner:
             sum_of_squares += (predicted_marginal - self.marginals[var]) ** 2
 
         # Handle nan columns - they should be 0s
-        sum_of_squares += (predictions[:, self.nan_columns_indices].sum(dim=0)**2).sum()
+        sum_of_squares += (predictions[:, self.nan_column_indices].sum(dim=0)**2).sum()
 
         RMSE = torch.sqrt(sum_of_squares / (self.n_marginal_vars + self.n_nan_columns))
 
@@ -185,6 +187,6 @@ class Finetuner:
 
             # save the best model to disk every 200 epochs
             if epoch % 200 == 0:
-                torch.save(self.best_model, f"{disk_path}")
+                torch.save(trainable_latent_codes, f"{disk_path}")
 
             print(f"Epoch {epoch}, Loss: {loss.item()}, LR: {self.new_lr}")
