@@ -127,3 +127,21 @@ class GroupSoftmax(nn.Module):
             start += size
 
         return torch.cat(outputs, dim=1)
+
+class GroupHardMax(nn.Module):
+    def __init__(self, group_sizes):
+        super(GroupHardMax, self).__init__()
+        self.group_sizes = group_sizes
+
+    def forward(self, x):
+        outputs = []
+        start = 0
+        n = x.shape[0]
+        for size in self.group_sizes:
+            section = x[:, start : start + size]
+            intermediate = torch.zeros_like(section)
+            intermediate[torch.arange(n), torch.argmax(section, dim = 1)] = 1
+            outputs.append(intermediate)
+            start += size
+
+        return torch.cat(outputs, dim=1)

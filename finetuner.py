@@ -1,6 +1,28 @@
+import json
+import os
 import re
 import torch
 import torch.nn.functional as F
+
+def store_losses(disk_path, loss, DBCE, DBCEKL, marginal_loss):
+    losses_json_path = '/workspace/finetuned_models/losses.json'
+
+    if os.path.exists(losses_json_path):
+        with open(losses_json_path, 'r') as f:
+            losses_json = json.load(f)
+
+    else:
+        losses_json = {}
+
+    losses_json[disk_path] = {
+        'loss': loss.item(), 
+        'DBCE': DBCE.item(), 
+        'DBCEKL': DBCEKL.item(), 
+        'marginal_loss': marginal_loss.item(),
+    }
+
+    with open(losses_json_path, 'w') as f:
+        json.dump(losses_json, f, indent = 4)
 
 class Finetuner:
     def __init__(self, pums_data, marginals, model, optimizer, device):
@@ -14,11 +36,11 @@ class Finetuner:
         self.model.to(device)
         self.best_model = None
 
-        self.start_decay = 300
-        self.stop_decay = 600
-        self.init_lr = 1e-2
+        self.start_decay = 50
+        self.stop_decay = 500
+        self.init_lr = 1e-1
         self.new_lr = self.init_lr
-        self.final_lr = 1e-2
+        self.final_lr = 1e-3
         self.decay_rate = (self.final_lr / self.init_lr) ** (
             1.0 / (self.stop_decay - self.start_decay)
         )
@@ -110,13 +132,11 @@ class Finetuner:
 
         # Handle non-nan columns
         for var, indices in self.matching_indices.items():
-            predicted_marginal = predictions[:, indices].sum()
+            predicted_marginal = predictions[:, indices].mean()
             sum_of_squares += (predicted_marginal - self.marginals[var]) ** 2
 
-        # Handle nan columns - they should be 0s
-        sum_of_squares += (predictions[:, self.non_conforming_column_indices].sum(dim=0)**2).sum()
-
-        # Handle SCHL:other column - it should be 0
+        # Handle nan and SCHL:other columns - they should be 0s
+        sum_of_squares += (predictions[:, self.non_conforming_column_indices].mean(dim=0)**2).sum()
 
         RMSE = torch.sqrt(sum_of_squares / (self.n_marginal_vars + self.n_non_conf_columns))
 
@@ -129,7 +149,7 @@ class Finetuner:
         eps = 1e-6  # for numerical stability
 
         # Clamp predictions to avoid log(0)
-        predictions = torch.clamp(predictions, min=eps, max=1 - eps)
+        predictions = torch.clamp(predictions, min=eps, max= 1 - eps)
 
         # Compute the logarithms
         log_p = torch.log(predictions)            # (Nt, D)
@@ -175,9 +195,14 @@ class Finetuner:
             predictions = self.model.decoder(trainable_latent_codes)
 
             # Obtain loss (unweighted sum?)
+            # Set weights
+            alpha = 1
+            beta = 1
+
             DBCE, DBCEKL = self.DBCE(predictions, self.data)
             marginal_loss = self.marginal_loss(predictions)
-            loss = DBCE + DBCEKL + marginal_loss
+
+            loss = alpha*DBCE + beta*DBCEKL + marginal_loss
 
             # update
             self.optimizer.zero_grad()
@@ -189,16 +214,28 @@ class Finetuner:
             if not self.best_model or loss.item() < min(losses):
                 self.best_model = self.model.state_dict()
 
-            # save the best model to disk every 200 epochs
-            if epoch % 400 == 0:
-                torch.save(trainable_latent_codes, f"{disk_path}")
 
             # Decay learning rate - for now omit
-            # if epoch >= self.start_decay and epoch <= self.stop_decay:
-            #     self.new_lr = self.init_lr * self.decay_rate ** (
-            #         epoch - self.start_decay
-            #     )
-            #     for param_group in self.optimizer.param_groups:
-            #         param_group["lr"] = self.new_lr
+            if epoch >= self.start_decay and epoch <= self.stop_decay:
+                self.new_lr = self.init_lr * self.decay_rate ** (
+                    epoch - self.start_decay
+                )
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = self.new_lr
 
-            print(f"Epoch {epoch}, Loss: {loss.item():.1f}, DBCE: {DBCE.item():.2f}, DBCEKL: {DBCEKL.item():.2f}, marginal: {marginal_loss.item():.2f}")
+            if epoch > 50: 
+                print(f"Epoch {epoch}, Loss: {loss.item():.5f}, DBCE: {alpha*DBCE.item():.5f}, DBCEKL: {beta*DBCEKL.item():.5f}, marginal: {marginal_loss.item():.5f}")
+
+        # save the best model at the end
+        torch.save(trainable_latent_codes, f"{disk_path}")
+
+        # Store final losses
+        store_losses(disk_path, loss, DBCE, DBCEKL, marginal_loss)
+
+        # Store final predictions
+        predictions_folder = '/workspace/finetuned_models/predictions/'
+        os.makedirs(predictions_folder, exist_ok=True)
+        final_preds = self.model.decoder(trainable_latent_codes)
+        model_name = disk_path.split('/')[-1]
+        torch.save(final_preds, predictions_folder + model_name)
+
