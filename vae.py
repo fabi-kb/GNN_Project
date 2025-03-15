@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class VAE(nn.Module):
@@ -12,11 +13,6 @@ class VAE(nn.Module):
         self.decoder = Decoder(
             input_dim, hidden_dim, hidden_layers, latent_dim, group_sizes
         )
-
-    def reparametrize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
 
     def forward(self, x):
         z, mu, logvar = self.encoder(x)
@@ -30,15 +26,13 @@ class VAE(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, hidden_layers, latent_dim):
         super(Encoder, self).__init__()
-        self.layers = self._build_layers(
-            input_dim, hidden_dim, hidden_layers, latent_dim
-        )
+        self.layers = self._build_layers(input_dim, hidden_dim, hidden_layers)
         self.mu = nn.Linear(hidden_dim, latent_dim)
         self.logvar = nn.Linear(hidden_dim, latent_dim)
         self.mu_bn = nn.BatchNorm1d(latent_dim, eps=1e-5)
         self.logvar_bn = nn.BatchNorm1d(latent_dim, eps=1e-5)
 
-    def _build_layers(self, input_dim, hidden_dim, hidden_layers, latent_dim):
+    def _build_layers(self, input_dim, hidden_dim, hidden_layers):
         layers = []
         layers.append(MLPBlock(input_dim, hidden_dim))
         for i in range(hidden_layers):
@@ -75,8 +69,9 @@ class Decoder(nn.Module):
             layers.append(ResidualBlock(hidden_dim, hidden_dim))
 
         layers.append(nn.Linear(hidden_dim, input_dim))
-        layers.append(nn.BatchNorm1d(input_dim, eps=1e-5))
-        layers.append(nn.ReLU())
+        # remove the to layers below, linear -> softmax now
+        # layers.append(nn.BatchNorm1d(input_dim, eps=1e-5))
+        # layers.append(nn.ReLU())
 
         # apply softmax to get probabilities for each onehot encoded feature
         layers.append(GroupSoftmax(group_sizes))
@@ -123,25 +118,8 @@ class GroupSoftmax(nn.Module):
         outputs = []
         start = 0
         for size in self.group_sizes:
-            outputs.append(nn.Softmax(dim=1)(x[:, start : start + size]))
+            tmp = x[:, start : start + size]
+            tmp = F.softmax(tmp, dim=1)
+            outputs.append(tmp)
             start += size
-
-        return torch.cat(outputs, dim=1)
-
-class GroupHardMax(nn.Module):
-    def __init__(self, group_sizes):
-        super(GroupHardMax, self).__init__()
-        self.group_sizes = group_sizes
-
-    def forward(self, x):
-        outputs = []
-        start = 0
-        n = x.shape[0]
-        for size in self.group_sizes:
-            section = x[:, start : start + size]
-            intermediate = torch.zeros_like(section)
-            intermediate[torch.arange(n), torch.argmax(section, dim = 1)] = 1
-            outputs.append(intermediate)
-            start += size
-
         return torch.cat(outputs, dim=1)
