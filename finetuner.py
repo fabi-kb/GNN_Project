@@ -24,51 +24,7 @@ def store_losses(disk_path, loss, DBCE, DBCEKL, marginal_loss):
     with open(losses_json_path, 'w') as f:
         json.dump(losses_json, f, indent = 4)
 
-class Finetuner:
-    def __init__(self, pums_data, marginals, model, optimizer, device):
-        self.data = torch.tensor(pums_data.values).float().to(device)
-        self.column_names = list(pums_data.columns)
-        self.marginals = marginals
-
-        self.model = model
-        self.optimizer = optimizer
-        self.device = device
-        self.model.to(device)
-        self.best_model = None
-
-        self.start_decay = 50
-        self.stop_decay = 500
-        self.init_lr = 1e-1
-        self.new_lr = self.init_lr
-        self.final_lr = 1e-3
-        self.decay_rate = (self.final_lr / self.init_lr) ** (
-            1.0 / (self.stop_decay - self.start_decay)
-        )
-
-        self.n_marginal_vars = len(marginals)
-        self.matching_indices = self._get_matching_indices(marginals, self.column_names)
-        self.non_conforming_column_indices = self._get_non_conf_col_indices(self.column_names)
-        self.n_non_conf_columns = len(self.non_conforming_column_indices)
-
-    def kl_loss(self, p):
-        n = len(p)  # uniform distribution would be 1/n for each index in p
-
-        p = torch.clip(p, 1e-8, 1)  # clip to avoid log(0)
-        return torch.sum(p * torch.log(n * p))
-
-    def _get_non_conf_col_indices(self, column_names):
-        '''
-        Get indices of columns that don't have a match in the marginals dict. For these columns, try to get values to 0 in finetuning
-        '''
-
-        schl_pattern = re.compile(r'SCHL_\d+:other')
-        non_conf_indices = [idx for idx, col in enumerate(column_names) if 
-                              'nan' in col
-                              or schl_pattern.search(col)]
-
-        return non_conf_indices
-
-    def _get_matching_indices(self, marginals, column_names):
+def get_matching_indices(marginals, column_names):
         """
         Get the indices of the columns in the data tensor that match the marginals
         """
@@ -126,6 +82,50 @@ class Finetuner:
         matching_indices.update(personal_var_indices)
 
         return matching_indices
+
+class Finetuner:
+    def __init__(self, pums_data, marginals, model, optimizer, device):
+        self.data = torch.tensor(pums_data.values).float().to(device)
+        self.column_names = list(pums_data.columns)
+        self.marginals = marginals
+
+        self.model = model
+        self.optimizer = optimizer
+        self.device = device
+        self.model.to(device)
+        self.best_model = None
+
+        self.start_decay = 50
+        self.stop_decay = 500
+        self.init_lr = 1e-1
+        self.new_lr = self.init_lr
+        self.final_lr = 1e-3
+        self.decay_rate = (self.final_lr / self.init_lr) ** (
+            1.0 / (self.stop_decay - self.start_decay)
+        )
+
+        self.n_marginal_vars = len(marginals)
+        self.matching_indices = get_matching_indices(marginals, self.column_names)
+        self.non_conforming_column_indices = self._get_non_conf_col_indices(self.column_names)
+        self.n_non_conf_columns = len(self.non_conforming_column_indices)
+
+    def kl_loss(self, p):
+        n = len(p)  # uniform distribution would be 1/n for each index in p
+
+        p = torch.clip(p, 1e-8, 1)  # clip to avoid log(0)
+        return torch.sum(p * torch.log(n * p))
+
+    def _get_non_conf_col_indices(self, column_names):
+        '''
+        Get indices of columns that don't have a match in the marginals dict. For these columns, try to get values to 0 in finetuning
+        '''
+
+        schl_pattern = re.compile(r'SCHL_\d+:other')
+        non_conf_indices = [idx for idx, col in enumerate(column_names) if 
+                              'nan' in col
+                              or schl_pattern.search(col)]
+
+        return non_conf_indices
     
     def marginal_loss(self, predictions):
         sum_of_squares = 0
@@ -196,7 +196,7 @@ class Finetuner:
 
             # Obtain loss (unweighted sum?)
             # Set weights
-            alpha = 1
+            alpha = 2
             beta = 1
 
             DBCE, DBCEKL = self.DBCE(predictions, self.data)
