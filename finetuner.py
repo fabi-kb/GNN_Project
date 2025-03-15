@@ -28,7 +28,8 @@ def get_matching_indices(marginals, column_names):
         """
         Get the indices of the columns in the data tensor that match the marginals
         """
-        matching_indices = {v: [] for v in marginals.keys()}
+        # Household indices
+        household_indices = {}
 
         # Handle simple household variables
         common_vars = [
@@ -39,7 +40,7 @@ def get_matching_indices(marginals, column_names):
             var_name: column_names.index(var_name) for var_name in common_vars
         }
 
-        matching_indices.update(simple_vars)
+        household_indices.update(simple_vars)
 
         # Handle household income variables that need extra binning
         extra_binning_vars = {
@@ -55,36 +56,39 @@ def get_matching_indices(marginals, column_names):
             ],
         }
 
-        matching_indices.update(extra_binning_vars)
+        household_indices.update(extra_binning_vars)
 
         # Handle personal variables
         # Find column indices to permit aggregating personal variables
         personal_one_hot_vars = [
             var.replace("_1", "") for var in column_names if "_1:" in var 
         ]
-        personal_var_indices = {}
+        personal_indices = {}
+        nan_indices = {}
 
-        # Remove undesirable columns: nan columns and SCHL:other
+        # Remove columns not present in marginals: nan columns and SCHL:other
         personal_one_hot_vars = [var for var in personal_one_hot_vars if 
-                                 not var == 'SCHL:other'
-                                 and not 'nan' in var]
+                                 not var == 'SCHL:other']
 
         # now store which columns correspond to each personal variable
         for var in personal_one_hot_vars:
             var_parts = var.split(":")
             pattern = re.compile(r"{}_\d+:{}".format(var_parts[0], var_parts[1]))
 
-            personal_matching_indices = [
+            matching_indices = [
                 idx for idx, col in enumerate(column_names) if pattern.match(col)
             ]
-            personal_var_indices[var] = personal_matching_indices
 
-        matching_indices.update(personal_var_indices)
+            # Store in dictionary depending on if nan or not
+            if 'nan' in var:
+                nan_indices[var] = matching_indices
+            else:
+                personal_indices[var] = matching_indices
 
-        return matching_indices
+        return household_indices, personal_indices, nan_indices
 
 class Finetuner:
-    def __init__(self, pums_data, marginals, model, optimizer, device):
+    def __init__(self, pums_data, marginals, model, optimizer, lr_0, lr_1, device):
         self.data = torch.tensor(pums_data.values).float().to(device)
         self.column_names = list(pums_data.columns)
         self.marginals = marginals
@@ -95,19 +99,22 @@ class Finetuner:
         self.model.to(device)
         self.best_model = None
 
-        self.start_decay = 50
-        self.stop_decay = 500
-        self.init_lr = 1e-1
+        self.start_decay = 200
+        self.stop_decay = 2000
+        self.init_lr = lr_0
         self.new_lr = self.init_lr
-        self.final_lr = 1e-3
+        self.final_lr = lr_1
         self.decay_rate = (self.final_lr / self.init_lr) ** (
             1.0 / (self.stop_decay - self.start_decay)
         )
 
         self.n_marginal_vars = len(marginals)
-        self.matching_indices = get_matching_indices(marginals, self.column_names)
+        self.household_indices, self.personal_indices, self.nan_indices = get_matching_indices(marginals, self.column_names)
         self.non_conforming_column_indices = self._get_non_conf_col_indices(self.column_names)
         self.n_non_conf_columns = len(self.non_conforming_column_indices)
+
+        self.n_households = torch.nan
+        self.num_people = torch.nan
 
     def kl_loss(self, p):
         n = len(p)  # uniform distribution would be 1/n for each index in p
@@ -129,23 +136,28 @@ class Finetuner:
     
     def marginal_loss(self, predictions):
         sum_of_squares = 0
-
-        # Handle non-nan columns
-        for var, indices in self.matching_indices.items():
+        # Handle household variables
+        for var, indices in self.household_indices.items():
             predicted_marginal = predictions[:, indices].mean()
             sum_of_squares += (predicted_marginal - self.marginals[var]) ** 2
 
-        # Handle nan and SCHL:other columns - they should be 0s
-        sum_of_squares += (predictions[:, self.non_conforming_column_indices].mean(dim=0)**2).sum()
+        # Handle personal variables
+        n_people_per_household = len(list(self.personal_indices.values())[0])
+        n_people_with_nans = n_people_per_household * self.n_households
 
-        RMSE = torch.sqrt(sum_of_squares / (self.n_marginal_vars + self.n_non_conf_columns))
+        for var, indices in self.personal_indices.items():
+            matching_nan_variable = var.split(":")[0] + ':' + 'nan' # Eg for SEX:male, matching nan variable is SEX:nan
+            n_people = n_people_with_nans - predictions[:, self.nan_indices[matching_nan_variable]].sum()
+            predicted_marginal = predictions[:, indices].sum()/n_people
+            sum_of_squares += (predicted_marginal - self.marginals[var])**2
+
+        RMSE = torch.sqrt(sum_of_squares / self.n_marginal_vars) 
 
         return RMSE
 
     def DBCE(self, predictions, labels):
         # predictions: (Nt, D) and labels: (N, D)
         Nt, D = predictions.shape
-        N = labels.shape[0]
         eps = 1e-6  # for numerical stability
 
         # Clamp predictions to avoid log(0)
@@ -189,6 +201,9 @@ class Finetuner:
 
         trainable_latent_codes.to(self.device)
 
+        # Store number of synthetic households
+        self.n_households = trainable_latent_codes.shape[0]
+
         losses = []
         for epoch in range(epochs):
             # Predict from latent codes
@@ -196,13 +211,14 @@ class Finetuner:
 
             # Obtain loss (unweighted sum?)
             # Set weights
-            alpha = 2
-            beta = 1
+            alpha = 1
+            beta = 500
+            gamma = 5
 
             DBCE, DBCEKL = self.DBCE(predictions, self.data)
             marginal_loss = self.marginal_loss(predictions)
 
-            loss = alpha*DBCE + beta*DBCEKL + marginal_loss
+            loss = alpha*DBCE + beta*DBCEKL + gamma*marginal_loss
 
             # update
             self.optimizer.zero_grad()
@@ -223,10 +239,11 @@ class Finetuner:
                 for param_group in self.optimizer.param_groups:
                     param_group["lr"] = self.new_lr
 
-            if epoch > 50: 
-                print(f"Epoch {epoch}, Loss: {loss.item():.5f}, DBCE: {alpha*DBCE.item():.5f}, DBCEKL: {beta*DBCEKL.item():.5f}, marginal: {marginal_loss.item():.5f}")
+            if epoch % 10 == 0: 
+                print(f"Epoch {epoch}, Loss: {loss.item():.5f}, DBCE: {alpha*DBCE.item():.5f}, DBCEKL: {beta*DBCEKL.item():.5f}, marginal: {gamma*marginal_loss.item():.5f}")
 
         # save the best model at the end
+        
         torch.save(trainable_latent_codes, f"{disk_path}")
 
         # Store final losses
