@@ -42,9 +42,9 @@ class Trainer:
         init_beta = beta
         for epoch in range(epochs):
             if epoch < self.start_decay:
-                beta = init_beta + (2.0 - init_beta) * (epoch / self.start_decay)
+                beta = init_beta + (1.0 - init_beta) * (epoch / self.start_decay)
             else:
-                beta = 2.0
+                beta = 1.0
             for i, x in enumerate(train_loader):
                 x = x.to(self.device)
                 x_hat, mu, logvar = self.model(x)
@@ -61,7 +61,6 @@ class Trainer:
             if not self.best_model or loss.item() < min(losses):
                 self.best_model = self.model.state_dict()
 
-            print(f"Epoch {epoch}, Loss: {loss.item()}")
             # save the best model to disk every 200 epochs
             if epoch % 200 == 0:
                 torch.save(self.best_model, f"{disk_path}")
@@ -73,7 +72,7 @@ class Trainer:
                 )
                 for param_group in self.optimizer.param_groups:
                     param_group["lr"] = self.new_lr
-
-            print(
-                f"Epoch {epoch}, Loss: {loss.item()}, LR: {self.new_lr}, Beta: {beta}, KL Loss: {beta * kl_loss}, Focal Loss: {focal_loss}"
-            )
+            if epoch % 10 == 0:
+                print(
+                    f"Epoch {epoch}, Loss: {loss.item()}, LR: {self.new_lr}, Beta: {beta}, KL Loss: {beta * kl_loss}, Focal Loss: {focal_loss}"
+                )

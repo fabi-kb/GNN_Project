@@ -14,11 +14,6 @@ class VAE(nn.Module):
             input_dim, hidden_dim, hidden_layers, latent_dim, group_sizes
         )
 
-    def reparametrize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
     def forward(self, x):
         z, mu, logvar = self.encoder(x)
         return self.decoder(z), mu, logvar
@@ -31,15 +26,13 @@ class VAE(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, hidden_layers, latent_dim):
         super(Encoder, self).__init__()
-        self.layers = self._build_layers(
-            input_dim, hidden_dim, hidden_layers, latent_dim
-        )
+        self.layers = self._build_layers(input_dim, hidden_dim, hidden_layers)
         self.mu = nn.Linear(hidden_dim, latent_dim)
         self.logvar = nn.Linear(hidden_dim, latent_dim)
         self.mu_bn = nn.BatchNorm1d(latent_dim, eps=1e-5)
         self.logvar_bn = nn.BatchNorm1d(latent_dim, eps=1e-5)
 
-    def _build_layers(self, input_dim, hidden_dim, hidden_layers, latent_dim):
+    def _build_layers(self, input_dim, hidden_dim, hidden_layers):
         layers = []
         layers.append(MLPBlock(input_dim, hidden_dim))
         for i in range(hidden_layers):
@@ -76,8 +69,9 @@ class Decoder(nn.Module):
             layers.append(ResidualBlock(hidden_dim, hidden_dim))
 
         layers.append(nn.Linear(hidden_dim, input_dim))
-        layers.append(nn.BatchNorm1d(input_dim, eps=1e-5))
-        layers.append(nn.ReLU())
+        # remove the to layers below, linear -> softmax now
+        # layers.append(nn.BatchNorm1d(input_dim, eps=1e-5))
+        # layers.append(nn.ReLU())
 
         # apply softmax to get probabilities for each onehot encoded feature
         layers.append(GroupSoftmax(group_sizes))
