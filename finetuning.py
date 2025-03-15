@@ -22,7 +22,7 @@ model_names = [name for name in all_models_names if name.startswith('bms')]
 # os.makedirs('/workspace/finetuned_models', exist_ok=True)
 # model_names = [name for name in all_models_names if not 'finetuned_full' + name in os.listdir('/workspace/finetuned_models')]
 
-n_epochs = 500
+n_epochs = 2000
 
 # Device config
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,8 +90,9 @@ group_sizes = [
 torch.manual_seed(1)
 torch.cuda.manual_seed(1)
 
+os.makedirs('/workspace/finetuned_models', exist_ok=True)
 # TESTING!
-for model_name in model_names[:1]:
+for model_name in model_names:
     model_name = 'bms_l100_h500_b2_g2.pth'
     print(f'\nTraining on {model_name}')
     # Find latent_dim and hidden_dim from model_name.
@@ -108,11 +109,12 @@ for model_name in model_names[:1]:
     trainable_latent_codes = torch.randn(n_synthetic_samples, latent_dim).to(device)
     trainable_latent_codes.requires_grad = True
 
-    lr_0 = 1e-2
+    lr_0 = 5e-1
+    lr_1 = 1e-2
     optimizer = optim.AdamW([trainable_latent_codes], lr=lr_0)
 
     # Initialise finetuner and train
-    finetuner = Finetuner(pums_data, marginals, model, optimizer, device)
+    finetuner = Finetuner(pums_data, marginals, model, optimizer, lr_0, lr_1, device)
 
     
     finetuned_model_name = 'finetuned_' + model_name
