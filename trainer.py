@@ -41,10 +41,20 @@ class Trainer:
         losses = []
         init_beta = beta
         for epoch in range(epochs):
+
             if epoch < self.start_decay:
                 beta = init_beta + (1.0 - init_beta) * (epoch / self.start_decay)
             else:
                 beta = 1.0
+
+            # decay learning
+            if epoch >= self.start_decay and epoch <= self.stop_decay:
+                self.new_lr = self.init_lr * self.decay_rate ** (
+                    epoch - self.start_decay
+                )
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = self.new_lr
+
             for i, x in enumerate(train_loader):
                 x = x.to(self.device)
                 x_hat, mu, logvar = self.model(x)
@@ -65,14 +75,12 @@ class Trainer:
             if epoch % 200 == 0:
                 torch.save(self.best_model, f"{disk_path}")
 
-            # decay learning
-            if epoch >= self.start_decay and epoch <= self.stop_decay:
-                self.new_lr = self.init_lr * self.decay_rate ** (
-                    epoch - self.start_decay
-                )
-                for param_group in self.optimizer.param_groups:
-                    param_group["lr"] = self.new_lr
-            if epoch % 10 == 0:
-                print(
-                    f"Epoch {epoch}, Loss: {loss.item()}, LR: {self.new_lr}, Beta: {beta}, KL Loss: {beta * kl_loss}, Focal Loss: {focal_loss}"
-                )
+            # if epoch % 1 == 0:
+            print(
+                f"Epoch {epoch}, Loss: {loss.item()}, LR: {self.new_lr}, Beta: {beta}, KL Loss: {beta * kl_loss}, Focal Loss: {focal_loss}"
+            )
+        # final save of best model to disk after training
+        if not self.best_model or loss.item() < min(losses):
+            self.best_model = self.model.state_dict()
+            torch.save(self.best_model, f"{disk_path}")
+            print(f"Final model saved to {disk_path}")
