@@ -66,10 +66,6 @@ def get_matching_indices(marginals, column_names):
         personal_indices = {}
         nan_indices = {}
 
-        # Remove columns not present in marginals: nan columns and SCHL:other
-        personal_one_hot_vars = [var for var in personal_one_hot_vars if 
-                                 not var == 'SCHL:other']
-
         # now store which columns correspond to each personal variable
         for var in personal_one_hot_vars:
             var_parts = var.split(":")

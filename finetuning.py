@@ -13,14 +13,7 @@ from finetuner import Finetuner
 
 # Parameters to set:
 n_synthetic_samples = 500
-data_name = "one_hot_pNaNs_agep.csv"
-model_name = "bms_l75_h500_b1_g2.pth"
-all_models_names = os.listdir('/workspace/models')
-model_names = [name for name in all_models_names if name.startswith('bms')]
-
-# # Don't repeat already trained models
-# os.makedirs('/workspace/finetuned_models', exist_ok=True)
-# model_names = [name for name in all_models_names if not 'finetuned_full' + name in os.listdir('/workspace/finetuned_models')]
+data_name = "one_hot_pNaNs_agep_21.csv"
 
 n_epochs = 2000
 
@@ -28,11 +21,10 @@ n_epochs = 2000
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
-
 # load data and marginals
 pums_data = pd.read_csv(f"/workspace/data/{data_name}")
 
-with open("marginals.json") as f:
+with open("/workspace/data/ACS_tract_tables/Delaware50101/marginals.json") as f:
     marginals = json.load(f)
 
 # Load model
@@ -91,9 +83,8 @@ torch.manual_seed(1)
 torch.cuda.manual_seed(1)
 
 os.makedirs('/workspace/finetuned_models', exist_ok=True)
-# TESTING!
+model_names = ['model_l25_h750_b2_g2_y21_final.pth']
 for model_name in model_names:
-    model_name = 'bms_l100_h500_b2_g2.pth'
     print(f'\nTraining on {model_name}')
     # Find latent_dim and hidden_dim from model_name.
     model_parts = model_name.split('_')
