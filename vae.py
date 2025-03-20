@@ -19,7 +19,8 @@ class VAE(nn.Module):
         return self.decoder(z), mu, logvar
 
     def pretrain_sample(self, num_samples):
-        z = torch.randn((num_samples, self.latent_dim))
+        device = next(self.parameters()).device
+        z = torch.randn((num_samples, self.latent_dim), device=device)
         return self.decoder(z)
 
 
