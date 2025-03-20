@@ -219,3 +219,4 @@ def generate_marginals(ACS_tables_dir):
 if __name__ == "__main__":
     generate_marginals(Path('/workspace/data/ACS_tract_tables/Delaware50101/'))
     generate_marginals(Path('/workspace/data/ACS_tract_tables/Delaware51801/'))
+    generate_marginals(Path('/workspace/data/ACS_tract_tables/NorthCarolina201/'))

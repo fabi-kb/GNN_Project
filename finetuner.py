@@ -4,26 +4,6 @@ import re
 import torch
 import torch.nn.functional as F
 
-def store_losses(disk_path, loss, DBCE, DBCEKL, marginal_loss):
-    losses_json_path = '/workspace/finetuned_models/losses.json'
-
-    if os.path.exists(losses_json_path):
-        with open(losses_json_path, 'r') as f:
-            losses_json = json.load(f)
-
-    else:
-        losses_json = {}
-
-    losses_json[disk_path] = {
-        'loss': loss.item(), 
-        'DBCE': DBCE.item(), 
-        'DBCEKL': DBCEKL.item(), 
-        'marginal_loss': marginal_loss.item(),
-    }
-
-    with open(losses_json_path, 'w') as f:
-        json.dump(losses_json, f, indent = 4)
-
 def get_matching_indices(marginals, column_names):
         """
         Get the indices of the columns in the data tensor that match the marginals
@@ -95,8 +75,8 @@ class Finetuner:
         self.model.to(device)
         self.best_model = None
 
-        self.start_decay = 200
-        self.stop_decay = 2000
+        self.start_decay = 500
+        self.stop_decay = 2500
         self.init_lr = lr_0
         self.new_lr = self.init_lr
         self.final_lr = lr_1
@@ -189,7 +169,7 @@ class Finetuner:
 
 
     def train(
-        self, trainable_latent_codes, epochs, disk_path=None
+        self, trainable_latent_codes, epochs, weights, disk_path=None
     ):
         # Freeze model
         for param in self.model.parameters():
@@ -200,29 +180,44 @@ class Finetuner:
         # Store number of synthetic households
         self.n_households = trainable_latent_codes.shape[0]
 
+        # Normalise weights
+        alpha, beta, gamma = weights.numpy().astype(int).tolist()
+        weights = weights.float()
+        weights /= weights.sum()
+
+        # Initialise loss trackers
         losses = []
+        marginal_losses = []
+        DBCE_losses = []
+        DBCEKL_losses = []
+        losses_dict = {'losses': losses,
+                    'marginal_losses': marginal_losses,
+                    'DBCE_losses': DBCE_losses,
+                    'DBCEKL_losses': DBCEKL_losses}
+
         for epoch in range(epochs):
             # Predict from latent codes
             predictions = self.model.decoder(trainable_latent_codes)
 
-            # Obtain loss (unweighted sum?)
-            # Set weights
-            alpha = 1
-            beta = 500
-            gamma = 5
+            # Obtain loss
 
             DBCE, DBCEKL = self.DBCE(predictions, self.data)
             marginal_loss = self.marginal_loss(predictions)
 
-            loss = alpha*DBCE + beta*DBCEKL + gamma*marginal_loss
+            loss = weights[0]*DBCE + weights[1]*DBCEKL + weights[2]*marginal_loss
 
             # update
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
-            # save best model so far based on loss
+            # Store losses
             losses.append(loss.item())
+            marginal_losses.append(marginal_loss.item())
+            DBCE_losses.append(DBCE.item())
+            DBCEKL_losses.append(DBCEKL.item())
+
+            # save best model so far based on loss
             if not self.best_model or loss.item() < min(losses):
                 self.best_model = self.model.state_dict()
 
@@ -235,20 +230,26 @@ class Finetuner:
                 for param_group in self.optimizer.param_groups:
                     param_group["lr"] = self.new_lr
 
+            if epoch == 0:
+                print(f'Initial WEIGHTED losses: DBCE: {alpha*DBCE.item():.5f}, DBCEKL: {beta*DBCEKL.item():.5f}, marginal: {gamma*marginal_loss.item():.5f}')
+
             if epoch % 10 == 0: 
-                print(f"Epoch {epoch}, Loss: {loss.item():.5f}, DBCE: {alpha*DBCE.item():.5f}, DBCEKL: {beta*DBCEKL.item():.5f}, marginal: {gamma*marginal_loss.item():.5f}")
+                print(f"Epoch {epoch}, Loss: {loss.item():.5f}, DBCE: {DBCE.item():.5f}, DBCEKL: {DBCEKL.item():.5f}, marginal: {marginal_loss.item():.5f}")
 
         # save the best model at the end
+        model_name = disk_path.split('/')[-1].removesuffix('.pth')
         
-        torch.save(trainable_latent_codes, f"{disk_path}")
+        torch.save(f'/workspace/finetuned_models/{model_name}_{alpha}_{beta}_{gamma}.pth', f"{disk_path}")
 
         # Store final losses
-        store_losses(disk_path, loss, DBCE, DBCEKL, marginal_loss)
+        os.makedirs('/workspace/finetuned_models/losses',exist_ok=True)
+        with open(f'/workspace/finetuned_models/losses/{model_name}_{alpha}_{beta}_{gamma}.json', 'w') as f:
+            json.dump(losses_dict, f, indent = 4)
 
         # Store final predictions
         predictions_folder = '/workspace/finetuned_models/predictions/'
         os.makedirs(predictions_folder, exist_ok=True)
         final_preds = self.model.decoder(trainable_latent_codes)
-        model_name = disk_path.split('/')[-1]
-        torch.save(final_preds, predictions_folder + model_name)
+        
+        torch.save(final_preds, predictions_folder + model_name + f'_{alpha}_{beta}_{gamma}.pth')
 

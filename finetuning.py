@@ -15,7 +15,7 @@ from finetuner import Finetuner
 n_synthetic_samples = 500
 data_name = "one_hot_pNaNs_agep_21.csv"
 
-n_epochs = 2000
+n_epochs = 3000
 
 # Device config
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -79,19 +79,27 @@ group_sizes = [
     7,
 ]
 
-torch.manual_seed(1)
-torch.cuda.manual_seed(1)
+torch.manual_seed(2)
+torch.cuda.manual_seed(2)
 
+# Delaware
 os.makedirs('/workspace/finetuned_models', exist_ok=True)
 model_names = ['model_l25_h750_b2_g2_y21_final.pth']
+model_names = ['north_carolina_best.pth']
 for model_name in model_names:
-    print(f'\nTraining on {model_name}')
-    # Find latent_dim and hidden_dim from model_name.
-    model_parts = model_name.split('_')
-    latent_dim = int(model_parts[1][1:])
-    hidden_dim = int(model_parts[2][1:])
 
-    model = VAE(433, hidden_dim, 6, latent_dim, group_sizes)
+    if 'north_carolina' in model_name:
+        latent_dim = 25
+        hidden_dim = 750
+        input_dim = 607
+    else:
+        # Find latent_dim and hidden_dim from model_name.
+        model_parts = model_name.split('_')
+        latent_dim = int(model_parts[1][1:])
+        hidden_dim = int(model_parts[2][1:])
+        input_dim = 433
+
+    model = VAE(input_dim, hidden_dim, 6, latent_dim, group_sizes)
 
     params = torch.load(f"/workspace/models/{model_name}", map_location=torch.device("cpu"))
     model.load_state_dict(params)
@@ -99,14 +107,30 @@ for model_name in model_names:
     # Generate synthetic codes - make trainable and put in optimizer
     trainable_latent_codes = torch.randn(n_synthetic_samples, latent_dim).to(device)
     trainable_latent_codes.requires_grad = True
-
-    lr_0 = 5e-1
-    lr_1 = 1e-2
-    optimizer = optim.AdamW([trainable_latent_codes], lr=lr_0)
-
-    # Initialise finetuner and train
-    finetuner = Finetuner(pums_data, marginals, model, optimizer, lr_0, lr_1, device)
-
     
     finetuned_model_name = 'finetuned_' + model_name
-    finetuner.train(trainable_latent_codes, n_epochs, f"/workspace/finetuned_models/{finetuned_model_name}")
+    # Set weights
+    weights_list = [torch.tensor([1,25,2]), torch.tensor([1,1,1]), torch.tensor([1,1,100])]#, torch.tensor([1,1,10])]
+
+    for weights in weights_list:
+        weights_as_list = weights.numpy().tolist()
+        if weights_as_list == [1,1,1]:
+            lr_0 = 1
+            lr_1 = 5e-1
+        elif weights_as_list == [1,25,2]:
+            lr_0 = 1
+            lr_1 = 5e-1
+        elif weights_as_list == [1,1,10]:
+            lr_0 = 1e-1
+            lr_1 = 1e-2
+        elif weights_as_list == [1,1,100]:
+            lr_0 = 5e-2
+            lr_1 = 1e-2
+
+        optimizer = optim.AdamW([trainable_latent_codes], lr=lr_0)
+
+        # Initialise finetuner and train
+        finetuner = Finetuner(pums_data, marginals, model, optimizer, lr_0, lr_1, device)
+
+        print(f'\nTraining on {model_name} with weights {weights_list}')
+        finetuner.train(trainable_latent_codes, n_epochs, weights, f"/workspace/finetuned_models/{finetuned_model_name}")
