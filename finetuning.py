@@ -132,5 +132,5 @@ for model_name in model_names:
         # Initialise finetuner and train
         finetuner = Finetuner(pums_data, marginals, model, optimizer, lr_0, lr_1, device)
 
-        print(f'\nTraining on {model_name} with weights {weights_list}')
+        print(f'\nTraining on {model_name} with weights {weights_as_list}')
         finetuner.train(trainable_latent_codes, n_epochs, weights, f"/workspace/finetuned_models/{finetuned_model_name}")
