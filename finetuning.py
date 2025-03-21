@@ -1,4 +1,5 @@
 # Imports
+import itertools
 import os
 import torch
 import torch.nn as nn
@@ -13,7 +14,7 @@ from finetuner import Finetuner
 
 # Parameters to set:
 n_synthetic_samples = 500
-data_name = "one_hot_pNaNs_agep_21.csv"
+
 
 n_epochs = 3000
 
@@ -22,13 +23,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
 # load data and marginals
-pums_data = pd.read_csv(f"/workspace/data/{data_name}")
 
-with open("/workspace/data/ACS_tract_tables/Delaware50101/marginals.json") as f:
-    marginals = json.load(f)
 
 # Load model
-group_sizes = [
+group_sizes_delaware = [
     2,
     5,
     5,
@@ -84,7 +82,7 @@ torch.cuda.manual_seed(2)
 
 # Delaware
 os.makedirs('/workspace/finetuned_models', exist_ok=True)
-model_names = ['model_l25_h750_b2_g2_y21_final.pth']
+#model_names = ['model_l25_h750_b2_g2_y21_final.pth']
 model_names = ['north_carolina_best.pth']
 for model_name in model_names:
 
@@ -92,12 +90,27 @@ for model_name in model_names:
         latent_dim = 25
         hidden_dim = 750
         input_dim = 607
+        pums_data = pd.read_csv("/workspace/data/north_carolina_21.csv")
+
+        with open("/workspace/data/ACS_tract_tables/NorthCarolina201/marginals.json") as f:
+            marginals = json.load(f)
+
+        prefixes = [v.split(':')[0] for v in pums_data.columns]
+        group_sizes = [len(list(group)) for _, group in itertools.groupby(prefixes)]
     else:
         # Find latent_dim and hidden_dim from model_name.
         model_parts = model_name.split('_')
         latent_dim = int(model_parts[1][1:])
         hidden_dim = int(model_parts[2][1:])
         input_dim = 433
+        pums_data = pd.read_csv("/workspace/data/one_hot_pNaNs_agep_21.csv")
+
+        with open("/workspace/data/ACS_tract_tables/Delaware50101/marginals.json") as f:
+            marginals = json.load(f)
+
+
+        prefixes = [v.split(':')[0] for v in pums_data.columns]
+        group_sizes = [len(list(group)) for _, group in itertools.groupby(prefixes)]
 
     model = VAE(input_dim, hidden_dim, 6, latent_dim, group_sizes)
 
@@ -110,7 +123,8 @@ for model_name in model_names:
     
     finetuned_model_name = 'finetuned_' + model_name
     # Set weights
-    weights_list = [torch.tensor([1,25,2]), torch.tensor([1,1,1]), torch.tensor([1,1,100])]#, torch.tensor([1,1,10])]
+    # weights_list = [torch.tensor([1,25,2]), torch.tensor([1,1,1]), torch.tensor([1,1,100]), torch.tensor([1,1,10])]
+    weights_list = [torch.tensor([1,1,10]), torch.tensor([1,1,100])]
 
     for weights in weights_list:
         weights_as_list = weights.numpy().tolist()
