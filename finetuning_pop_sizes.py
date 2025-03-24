@@ -13,7 +13,7 @@ from vae import VAE
 from finetuner import Finetuner
 
 # Parameters to set:
-n_synthetic_samples = 500
+
 
 
 n_epochs = 3000
@@ -83,7 +83,7 @@ torch.cuda.manual_seed(2)
 # Delaware
 os.makedirs('/workspace/finetuned_models', exist_ok=True)
 model_names = ['model_l25_h750_b2_g2_y21_final.pth']
-# model_names = ['north_carolina_best.pth']
+
 for model_name in model_names:
 
     if 'north_carolina' in model_name:
@@ -118,33 +118,25 @@ for model_name in model_names:
     model.load_state_dict(params)
 
     # Generate synthetic codes - make trainable and put in optimizer
-    trainable_latent_codes = torch.randn(n_synthetic_samples, latent_dim).to(device)
-    trainable_latent_codes.requires_grad = True
+    
     
     finetuned_model_name = 'finetuned_' + model_name
     # Set weights
-    weights_list = [torch.tensor([1,25,2]), torch.tensor([1,1,1]), torch.tensor([1,1,100]), torch.tensor([1,1,10])]
-    weights_list = [torch.tensor([1,1,10])]
+    # weights_list = [torch.tensor([1,25,2]), torch.tensor([1,1,1]), torch.tensor([1,1,100]), torch.tensor([1,1,10])]
+    weights = torch.tensor([1,1,10])
+    lr_0 = 1e-1
+    lr_1 = 1e-2
 
-    for weights in weights_list:
-        weights_as_list = weights.numpy().tolist()
-        if weights_as_list == [1,1,1]:
-            lr_0 = 3e-2
-            lr_1 = 3e-3
-        elif weights_as_list == [1,25,2]:
-            lr_0 = 1
-            lr_1 = 1e-1
-        elif weights_as_list == [1,1,10]:
-            lr_0 = 5e-2
-            lr_1 = 5e-3
-        elif weights_as_list == [1,1,100]:
-            lr_0 = 1e-2
-            lr_1 = 1e-3
+    
+
+    for n_samples in [50,100,200,500,1000]:
+        trainable_latent_codes = torch.randn(n_samples, latent_dim).to(device)
+        trainable_latent_codes.requires_grad = True
 
         optimizer = optim.AdamW([trainable_latent_codes], lr=lr_0)
 
         # Initialise finetuner and train
         finetuner = Finetuner(pums_data, marginals, model, optimizer, lr_0, lr_1, device)
 
-        print(f'\nTraining on {model_name} with weights {weights_as_list}')
-        finetuner.train(trainable_latent_codes, n_epochs, weights, f"/workspace/finetuned_models/{finetuned_model_name}")
+        print(f'\nTraining on {model_name} with num samples {n_samples}')
+        finetuner.train(trainable_latent_codes, n_epochs, weights, f"/workspace/finetuned_models/{finetuned_model_name}", n_samples = n_samples)

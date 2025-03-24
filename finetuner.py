@@ -169,7 +169,7 @@ class Finetuner:
 
 
     def train(
-        self, trainable_latent_codes, epochs, weights, disk_path=None
+        self, trainable_latent_codes, epochs, weights, disk_path=None, n_samples = None
     ):
         # Freeze model
         for param in self.model.parameters():
@@ -243,13 +243,20 @@ class Finetuner:
 
         # Store final losses
         os.makedirs('/workspace/finetuned_models/losses',exist_ok=True)
-        with open(f'/workspace/finetuned_models/losses/{model_name}_{alpha}_{beta}_{gamma}.json', 'w') as f:
-            json.dump(losses_dict, f, indent = 4)
-
+        if n_samples:
+            with open(f'/workspace/finetuned_models/losses/{model_name}_{n_samples}.json', 'w') as f:
+                json.dump(losses_dict, f, indent = 4)
+        else:
+            with open(f'/workspace/finetuned_models/losses/{model_name}_{alpha}_{beta}_{gamma}.json', 'w') as f:
+                json.dump(losses_dict, f, indent = 4)
         # Store final predictions
         predictions_folder = '/workspace/finetuned_models/predictions/'
         os.makedirs(predictions_folder, exist_ok=True)
         final_preds = self.model.decoder(trainable_latent_codes)
         
-        torch.save(final_preds, predictions_folder + model_name + f'_{alpha}_{beta}_{gamma}.pth')
+        if n_samples:
+            torch.save(final_preds, predictions_folder + model_name + f'_{n_samples}.pth')
+        else:
+            torch.save(final_preds, predictions_folder + model_name + f'_{alpha}_{beta}_{gamma}.pth')
+            
 
