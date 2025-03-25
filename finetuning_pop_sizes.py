@@ -124,12 +124,11 @@ for model_name in model_names:
     # Set weights
     # weights_list = [torch.tensor([1,25,2]), torch.tensor([1,1,1]), torch.tensor([1,1,100]), torch.tensor([1,1,10])]
     weights = torch.tensor([1,1,10])
-    lr_0 = 1e-1
-    lr_1 = 1e-2
+    lr_0 = 5e-2
+    lr_1 = 5e-3
 
-    
 
-    for n_samples in [50,100,200,500,1000]:
+    for n_samples in [1436]:
         trainable_latent_codes = torch.randn(n_samples, latent_dim).to(device)
         trainable_latent_codes.requires_grad = True
 

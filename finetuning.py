@@ -13,7 +13,7 @@ from vae import VAE
 from finetuner import Finetuner
 
 # Parameters to set:
-n_synthetic_samples = 500
+n_synthetic_samples = 1436
 
 
 n_epochs = 3000
@@ -124,7 +124,7 @@ for model_name in model_names:
     finetuned_model_name = 'finetuned_' + model_name
     # Set weights
     weights_list = [torch.tensor([1,25,2]), torch.tensor([1,1,1]), torch.tensor([1,1,100]), torch.tensor([1,1,10])]
-    weights_list = [torch.tensor([1,1,10])]
+    weights_list = [torch.tensor([1,1,1]), torch.tensor([1,1,100]), torch.tensor([1,1,10])]
 
     for weights in weights_list:
         weights_as_list = weights.numpy().tolist()
@@ -132,8 +132,8 @@ for model_name in model_names:
             lr_0 = 3e-2
             lr_1 = 3e-3
         elif weights_as_list == [1,25,2]:
-            lr_0 = 1
-            lr_1 = 1e-1
+            lr_0 = 1e-1
+            lr_1 = 1e-2
         elif weights_as_list == [1,1,10]:
             lr_0 = 5e-2
             lr_1 = 5e-3
